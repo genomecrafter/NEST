@@ -1,0 +1,521 @@
+import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import train_test_split
+
+# Load the dataset
+data = pd.read_excel("usecase_4_.xlsx")  
+
+# Step 1: Handle missing values
+# Drop columns with too many missing values
+threshold = 0.4  # Allow up to 40% missing values
+data_cleaned = data.loc[:, data.isnull().mean() < threshold]
+
+# Impute missing values for categorical columns
+imputer = SimpleImputer(strategy='most_frequent')  
+data_cleaned.loc[:, 'Secondary Outcome Measures'] = imputer.fit_transform(data_cleaned[['Secondary Outcome Measures']]).ravel()
+
+# Impute missing values for numerical columns
+numerical_columns = data_cleaned.select_dtypes(include=['float64', 'int64']).columns
+imputer = SimpleImputer(strategy='median')
+data_cleaned.loc[:, numerical_columns] = imputer.fit_transform(data_cleaned[numerical_columns])
+
+# Handle specific missing value cases
+if 'Study Duration (days)' in data_cleaned.columns:
+    data_cleaned['Study Duration (days)'] = data_cleaned['Study Duration (days)'].fillna(
+        data_cleaned['Study Duration (days)'].median()
+    )
+
+# Step 2: Encode categorical data with a cardinality check
+categorical_columns = data_cleaned.select_dtypes(include=['object', 'category']).columns
+
+for col in categorical_columns:
+    unique_count = data_cleaned[col].nunique()
+    if unique_count > 50:  # Set a threshold for high cardinality
+        # Convert mixed types to strings before encoding
+        data_cleaned[col] = data_cleaned[col].astype(str)
+        le = LabelEncoder()
+        data_cleaned[col] = le.fit_transform(data_cleaned[col])
+    else:
+        # Ensure only categorical values for one-hot encoding
+        data_cleaned = pd.get_dummies(data_cleaned, columns=[col], drop_first=True)
+
+# If there are still mixed-type columns, handle them as strings
+mixed_type_columns = data_cleaned.select_dtypes(include=['object']).columns
+for col in mixed_type_columns:
+    data_cleaned[col] = data_cleaned[col].astype(str)
+    le = LabelEncoder()
+    data_cleaned[col] = le.fit_transform(data_cleaned[col])
+
+# Step 3: Standardize numerical features
+scaler = StandardScaler()
+numerical_features = data_cleaned.select_dtypes(include=['float64', 'int64']).columns
+data_cleaned[numerical_features] = scaler.fit_transform(data_cleaned[numerical_features])
+
+# Step 4: Split the data into training and testing sets
+target_column = "Study Recruitment Rate"  # Replace with your target column name
+if target_column in data_cleaned.columns:
+    X = data_cleaned.drop(columns=[target_column])
+    y = data_cleaned[target_column]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    print("Data Preprocessing Complete.")
+    print(f"Training Data Shape: {X_train.shape}")
+    print(f"Testing Data Shape: {X_test.shape}")
+    
+    # Save the cleaned data to a new CSV file
+    data_cleaned.to_csv("processed_data.csv", index=False)
+    print("Processed data saved to 'processed_data.csv'.")
+else:
+    print("Target column not found in the dataset.")
+
+PS C:\Users\nikit\Documents\NEST> & C:/Users/nikit/AppData/Local/Programs/Python/Python312/python.exe c:/Users/nikit/Documents/NEST/data_preprocess.py
+c:\Users\nikit\Documents\NEST\data_preprocess.py:35: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  data_cleaned[col] = data_cleaned[col].astype(str)
+c:\Users\nikit\Documents\NEST\data_preprocess.py:37: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  data_cleaned[col] = le.fit_transform(data_cleaned[col])
+c:\Users\nikit\Documents\NEST\data_preprocess.py:35: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  data_cleaned[col] = data_cleaned[col].astype(str)
+c:\Users\nikit\Documents\NEST\data_preprocess.py:37: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  data_cleaned[col] = le.fit_transform(data_cleaned[col])
+c:\Users\nikit\Documents\NEST\data_preprocess.py:35: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  data_cleaned[col] = data_cleaned[col].astype(str)
+c:\Users\nikit\Documents\NEST\data_preprocess.py:37: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  data_cleaned[col] = le.fit_transform(data_cleaned[col])
+Data Preprocessing Complete.
+Training Data Shape: (16540, 44)
+Testing Data Shape: (4136, 44)
+Processed data saved to 'processed_data11.csv'.
+PS C:\Users\nikit\Documents\NEST> 
+
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import accuracy_score, precision_score, f1_score, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Load the cleaned data
+data_cleaned = pd.read_csv('processed_data.csv')
+
+# Check and handle date columns
+for col in data_cleaned.columns:
+    if data_cleaned[col].dtype == 'object' and '-' in str(data_cleaned[col].iloc[0]):  # Assuming date format with '-'
+        try:
+            data_cleaned[col] = pd.to_datetime(data_cleaned[col], errors='coerce')  # Convert to datetime
+            data_cleaned[col + '_year'] = data_cleaned[col].dt.year
+            data_cleaned[col + '_month'] = data_cleaned[col].dt.month
+            data_cleaned[col + '_day'] = data_cleaned[col].dt.day
+            data_cleaned.drop(col, axis=1, inplace=True)  # Drop original date column after processing
+        except Exception as e:
+            print(f"Skipping column {col}: {e}")
+
+# Assume 'Study Recruitment Rate' is the column you're trying to predict
+X = data_cleaned.drop('Study Recruitment Rate', axis=1)  # Features (drop the target column)
+y = data_cleaned['Study Recruitment Rate']  # Target variable
+
+# Split data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize and train the model (Random Forest Regressor here)
+model = RandomForestRegressor(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+# Evaluate the model (for regression)
+rmse = mean_squared_error(y_test, y_pred, squared=False)
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+# Print regression evaluation metrics
+print("Model Training Complete.")
+print(f"Root Mean Square Error (RMSE): {rmse}")
+print(f"Mean Absolute Error (MAE): {mae}")
+print(f"R-squared (R²) Score: {r2}")
+
+# Convert the regression output into categories (optional step)
+def categorize_predictions(predictions):
+    return ['low' if pred < 0.3 else 'medium' if pred < 0.7 else 'high' for pred in predictions]
+
+# Categorize predictions and true labels for classification metrics
+y_pred_categorized = categorize_predictions(y_pred)
+y_true_categorized = categorize_predictions(y_test)
+
+# Calculate classification metrics (accuracy, precision, F1 score)
+accuracy = accuracy_score(y_true_categorized, y_pred_categorized)
+precision = precision_score(y_true_categorized, y_pred_categorized, average='weighted')
+f1 = f1_score(y_true_categorized, y_pred_categorized, average='weighted')
+
+# Print classification metrics
+print(f"Accuracy: {accuracy}")
+print(f"Precision: {precision}")
+print(f"F1 Score: {f1}")
+
+# Confusion Matrix
+conf_matrix = confusion_matrix(y_true_categorized, y_pred_categorized, labels=['low', 'medium', 'high'])
+
+# Print confusion matrix
+print("Confusion Matrix:")
+print(conf_matrix)
+
+# Plot the confusion matrix using Seaborn heatmap for better visualization
+plt.figure(figsize=(6, 5))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=['low', 'medium', 'high'], yticklabels=['low', 'medium', 'high'])
+plt.ylabel('Actual')
+plt.xlabel('Predicted')
+plt.title('Confusion Matrix')
+plt.show()
+
+
+PS C:\Users\nikit\Documents\NEST> & C:/Users/nikit/AppData/Local/Programs/Python/Python312/python.exe c:/Users/nikit/Documents/NEST/model.py
+C:\Users\nikit\AppData\Local\Programs\Python\Python312\Lib\site-packages\sklearn\metrics\_regression.py:492: FutureWarning: 'squared' is deprecated in version 1.4 and will be removed in 1.6. To calculate the root mean squared error, use the function'root_mean_squared_error'.
+  warnings.warn(
+Model Training Complete.
+Root Mean Square Error (RMSE): 0.7626337460271879
+Mean Absolute Error (MAE): 0.13513955232877634
+R-squared (R²) Score: -0.21428209019685962
+Accuracy: 0.9185203094777563
+Precision: 0.9148251717081207
+F1 Score: 0.9162855465097718
+Confusion Matrix:
+[[3735  108   32]
+ [ 113   46    7]
+ [  52   25   18]]
+PS C:\Users\nikit\Documents\NEST> 
+
+# import pandas as pd
+# from sklearn.model_selection import train_test_split
+# from sklearn.ensemble import RandomForestRegressor
+# from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+# from sklearn.metrics import accuracy_score, precision_score, f1_score, confusion_matrix
+# import seaborn as sns
+# import matplotlib.pyplot as plt
+
+# # Load the cleaned data
+# data_cleaned = pd.read_csv('processed_data.csv')
+
+# # Check and handle date columns
+# for col in data_cleaned.columns:
+#     if data_cleaned[col].dtype == 'object' and '-' in str(data_cleaned[col].iloc[0]):  # Assuming date format with '-'
+#         try:
+#             data_cleaned[col] = pd.to_datetime(data_cleaned[col], errors='coerce')  # Convert to datetime
+#             data_cleaned[col + '_year'] = data_cleaned[col].dt.year
+#             data_cleaned[col + '_month'] = data_cleaned[col].dt.month
+#             data_cleaned[col + '_day'] = data_cleaned[col].dt.day
+#             data_cleaned.drop(col, axis=1, inplace=True)  # Drop original date column after processing
+#         except Exception as e:
+#             print(f"Skipping column {col}: {e}")
+
+# # Assume 'Study Recruitment Rate' is the column you're trying to predict
+# X = data_cleaned.drop('Study Recruitment Rate', axis=1)  # Features (drop the target column)
+# y = data_cleaned['Study Recruitment Rate']  # Target variable
+
+# # Split data into training and testing sets
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# # Initialize and train the model (Random Forest Regressor here)
+# model = RandomForestRegressor(n_estimators=100, random_state=42)
+# model.fit(X_train, y_train)
+
+# # Make predictions
+# y_pred = model.predict(X_test)
+
+# # Evaluate the model (for regression)
+# rmse = mean_squared_error(y_test, y_pred, squared=False)
+# mae = mean_absolute_error(y_test, y_pred)
+# r2 = r2_score(y_test, y_pred)
+
+# # Print regression evaluation metrics
+# print("Model Training Complete.")
+# print(f"Root Mean Square Error (RMSE): {rmse}")
+# print(f"Mean Absolute Error (MAE): {mae}")
+# print(f"R-squared (R²) Score: {r2}")
+
+# # Convert the regression output into categories (optional step)
+# def categorize_predictions(predictions):
+#     return ['low' if pred < 0.3 else 'medium' if pred < 0.7 else 'high' for pred in predictions]
+
+# # Categorize predictions and true labels for classification metrics
+# y_pred_categorized = categorize_predictions(y_pred)
+# y_true_categorized = categorize_predictions(y_test)
+
+# # Calculate classification metrics (accuracy, precision, F1 score)
+# accuracy = accuracy_score(y_true_categorized, y_pred_categorized)
+# precision = precision_score(y_true_categorized, y_pred_categorized, average='weighted')
+# f1 = f1_score(y_true_categorized, y_pred_categorized, average='weighted')
+
+# # Print classification metrics
+# print(f"Accuracy: {accuracy}")
+# print(f"Precision: {precision}")
+# print(f"F1 Score: {f1}")
+
+# # Confusion Matrix
+# conf_matrix = confusion_matrix(y_true_categorized, y_pred_categorized, labels=['low', 'medium', 'high'])
+
+# # Print confusion matrix
+# print("Confusion Matrix:")
+# print(conf_matrix)
+
+# # Plot the confusion matrix using Seaborn heatmap for better visualization
+# plt.figure(figsize=(6, 5))
+# sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=['low', 'medium', 'high'], yticklabels=['low', 'medium', 'high'])
+# plt.ylabel('Actual')
+# plt.xlabel('Predicted')
+# plt.title('Confusion Matrix')
+# plt.show()
+
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import FunctionTransformer
+
+# Load the cleaned dataset
+data_cleaned = pd.read_csv("processed_data.csv")
+
+# Step 1: Split the data into features and target
+target_column = "Study Recruitment Rate"  # Replace with your target column name
+if target_column in data_cleaned.columns:
+    X = data_cleaned.drop(columns=[target_column])
+    y = data_cleaned[target_column]
+    
+    # Convert date columns to numerical format if any
+    date_columns = X.select_dtypes(include=['object']).columns
+    for col in date_columns:
+        try:
+            # If the column contains dates, convert them to datetime
+            X[col] = pd.to_datetime(X[col], errors='coerce')
+            # Convert dates to the number of days since the minimum date
+            X[col] = (X[col] - X[col].min()).dt.days
+        except Exception as e:
+            print(f"Skipping column {col} due to error: {e}")
+
+    # Handle missing values (if any) by imputing with the median for numeric columns
+    numeric_cols = X.select_dtypes(include=['number']).columns
+    X[numeric_cols] = X[numeric_cols].fillna(X[numeric_cols].median())
+
+    # One-hot encode categorical features
+    categorical_cols = X.select_dtypes(include=['object']).columns
+    if len(categorical_cols) > 0:
+        encoder = OneHotEncoder(drop='first', handle_unknown='ignore')
+        X_encoded = encoder.fit_transform(X[categorical_cols])
+        X = X.drop(columns=categorical_cols)
+        X = pd.concat([X, pd.DataFrame(X_encoded)], axis=1)
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    print("Data Preprocessing Complete.")
+    print(f"Training Data Shape: {X_train.shape}")
+    print(f"Testing Data Shape: {X_test.shape}")
+    
+    # Step 2: Model Training (Random Forest Regressor)
+    rf = RandomForestRegressor(random_state=42)
+
+    # Hyperparameter tuning with GridSearchCV
+    param_grid = {
+        'n_estimators': [100, 200, 300],
+        'max_depth': [None, 10, 20, 30],
+        'min_samples_split': [2, 5, 10],
+        'min_samples_leaf': [1, 2, 4],
+        'max_features': ['sqrt', 'log2', None]
+    }
+
+    grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
+    grid_search.fit(X_train, y_train)
+
+    # Best model
+    best_rf = grid_search.best_estimator_
+
+    # Step 3: Evaluate the Model
+    y_pred = best_rf.predict(X_test)
+
+    # Print Evaluation Metrics
+    print("Best Parameters:", grid_search.best_params_)
+
+    # RMSE (Root Mean Squared Error)
+    rmse = mean_squared_error(y_test, y_pred, squared=False)
+    print(f"RMSE: {rmse}")
+
+    # MAE (Mean Absolute Error)
+    mae = mean_absolute_error(y_test, y_pred)
+    print(f"MAE: {mae}")
+
+    # R² (R-squared)
+    r2 = r2_score(y_test, y_pred)
+    print(f"R²: {r2}")
+
+else:
+    print("Target column not found in the dataset.")
+
+
+
+[CV] END max_depth=30, max_features=None, min_samples_leaf=4, min_samples_split=5, n_estimators=300; total time= 1.4min
+[CV] END max_depth=30, max_features=None, min_samples_leaf=4, min_samples_split=10, n_estimators=300; total time= 1.1min
+[CV] END max_depth=30, max_features=None, min_samples_leaf=4, min_samples_split=10, n_estimators=300; total time= 1.2min
+[CV] END max_depth=30, max_features=None, min_samples_leaf=4, min_samples_split=10, n_estimators=300; total time= 1.1min
+Best Parameters: {'max_depth': 30, 'max_features': 'log2', 'min_samples_leaf': 1, 'min_samples_split': 2, 'n_estimators': 200}
+C:\Users\nikit\AppData\Local\Programs\Python\Python312\Lib\site-packages\sklearn\metrics\_regression.py:492: FutureWarning: 'squared' is deprecated in version 1.4 and will be removed in 1.6. To calculate the root mean squared error, use the function'root_mean_squared_error'.
+  warnings.warn(
+RMSE: 0.6542205518669892
+MAE: 0.12711423284803994
+R²: 0.10641490027877776
+PS C:\Users\nikit\Documents\NEST> 
+
+
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, explained_variance_score, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.preprocessing import OneHotEncoder
+import numpy as np
+import time
+
+# Load the cleaned dataset
+data_cleaned = pd.read_csv("processed_data.csv")
+
+# Step 1: Split the data into features and target
+target_column = "Study Recruitment Rate"  # Replace with your target column name
+if target_column in data_cleaned.columns:
+    X = data_cleaned.drop(columns=[target_column])
+    y = data_cleaned[target_column]
+    
+    # Convert date columns to numerical format if any
+    date_columns = X.select_dtypes(include=['object']).columns
+    for col in date_columns:
+        try:
+            # If the column contains dates, convert them to datetime
+            X[col] = pd.to_datetime(X[col], errors='coerce')
+            # Convert dates to the number of days since the minimum date
+            X[col] = (X[col] - X[col].min()).dt.days
+        except Exception as e:
+            print(f"Skipping column {col} due to error: {e}")
+
+    # Handle missing values (if any) by imputing with the median for numeric columns
+    numeric_cols = X.select_dtypes(include=['number']).columns
+    X[numeric_cols] = X[numeric_cols].fillna(X[numeric_cols].median())
+
+    # One-hot encode categorical features
+    categorical_cols = X.select_dtypes(include=['object']).columns
+    if len(categorical_cols) > 0:
+        encoder = OneHotEncoder(drop='first', handle_unknown='ignore')
+        X_encoded = encoder.fit_transform(X[categorical_cols])
+        X = X.drop(columns=categorical_cols)
+        X = pd.concat([X, pd.DataFrame(X_encoded)], axis=1)
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    print("Data Preprocessing Complete.")
+    print(f"Training Data Shape: {X_train.shape}")
+    print(f"Testing Data Shape: {X_test.shape}")
+    
+    # Step 2: Model Training (Random Forest Regressor)
+    rf = RandomForestRegressor(random_state=42)
+
+    # Expanded Hyperparameter Grid
+    param_grid = {
+        'n_estimators': [100, 200, 300, 500],
+        'max_depth': [None, 10, 20, 30, 50],
+        'min_samples_split': [2, 5, 10, 20],
+        'min_samples_leaf': [1, 2, 4, 10],
+        'max_features': ['sqrt', 'log2', None],
+        'bootstrap': [True, False]
+    }
+
+    # Use RandomizedSearchCV for faster optimization
+    start_time = time.time()  # Start time tracking
+    random_search = RandomizedSearchCV(estimator=rf, param_distributions=param_grid, n_iter=50, cv=3, n_jobs=-1, verbose=2, random_state=42)
+    random_search.fit(X_train, y_train)
+    end_time = time.time()  # End time tracking
+    print(f"Time taken for RandomizedSearchCV: {end_time - start_time:.2f} seconds")
+
+    # Best model
+    best_rf = random_search.best_estimator_
+
+    # Step 3: Evaluate the Model
+    y_pred = best_rf.predict(X_test)
+
+    # Print Evaluation Metrics
+    print("Best Parameters:", random_search.best_params_)
+
+    # RMSE (Root Mean Squared Error)
+    rmse = mean_squared_error(y_test, y_pred, squared=False)
+    print(f"RMSE: {rmse}")
+
+    # MAE (Mean Absolute Error)
+    mae = mean_absolute_error(y_test, y_pred)
+    print(f"MAE: {mae}")
+
+    # R² (R-squared)
+    r2 = r2_score(y_test, y_pred)
+    print(f"R²: {r2}")
+
+    # Explained Variance Score
+    evs = explained_variance_score(y_test, y_pred)
+    print(f"Explained Variance Score: {evs}")
+
+    # Convert continuous target variable into categorical (e.g., bins for classification metrics)
+    y_bins = pd.cut(y_test, bins=3, labels=["Low", "Medium", "High"])
+    y_pred_bins = pd.cut(y_pred, bins=3, labels=["Low", "Medium", "High"])
+
+    # Accuracy, Precision, Recall, F1-score
+    accuracy = accuracy_score(y_bins, y_pred_bins)
+    precision = precision_score(y_bins, y_pred_bins, average='weighted', zero_division=0)
+    recall = recall_score(y_bins, y_pred_bins, average='weighted', zero_division=0)
+    f1 = f1_score(y_bins, y_pred_bins, average='weighted', zero_division=0)
+
+    print(f"Accuracy: {accuracy}")
+    print(f"Precision: {precision}")
+    print(f"Recall: {recall}")
+    print(f"F1 Score: {f1}")
+
+else:
+    print("Target column not found in the dataset.")
+
+
+[CV] END bootstrap=False, max_depth=20, max_features=None, min_samples_leaf=1, min_samples_split=2, n_estimators=500; total time= 4.5min
+Time taken for RandomizedSearchCV: 641.75 seconds
+Best Parameters: {'n_estimators': 100, 'min_samples_split': 2, 'min_samples_leaf': 1, 'max_features': 'sqrt', 'max_depth': 30, 'bootstrap': False}
+C:\Users\nikit\AppData\Local\Programs\Python\Python312\Lib\site-packages\sklearn\metrics\_regression.py:492: FutureWarning: 'squared' is deprecated in version 1.4 and will be removed in 1.6. To calculate the root mean squared error, use the function'root_mean_squared_error'.
+  warnings.warn(
+RMSE: 0.6523007351724075
+MAE: 0.12391225323558032
+R²: 0.11165167397217812
+Explained Variance Score: 0.111808749309661
+Accuracy: 0.9949226305609284
+Precision: 0.9990801212823317
+Recall: 0.9949226305609284
+F1 Score: 0.9968180478116215
+PS C:\Users\nikit\Documents\NEST> 
